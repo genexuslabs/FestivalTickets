@@ -24,4 +24,13 @@ resource "azurerm_windows_web_app" "bo" {
         virtual_path  = "/"
     }
   }
+  app_settings = {
+    "GX_STORAGE_ACCOUNT_NAME" = azurerm_storage_account.main.name
+    "GX_STORAGE_ACCESS_KEY" = azurerm_storage_account.main.primary_access_key
+    "GX_CONNECTION-NOSQLDB-DATASOURCE" = tostring("${azurerm_cosmosdb_account.main.connection_strings[0]}")
+    
+    "GX_CONNECTION-DEFAULT-DATASOURCE" = azurerm_mssql_server.main.fully_qualified_domain_name
+    "GX_CONNECTION-DEFAULT-USER" = azurerm_mssql_server.main.administrator_login
+    "GX_CONNECTION-DEFAULT-PASSWORD" = azurerm_mssql_server.main.administrator_login_password
+  }
 }

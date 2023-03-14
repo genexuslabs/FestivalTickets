@@ -23,6 +23,15 @@ resource "azurerm_windows_function_app" "ruffle" {
       use_dotnet_isolated_runtime = true
     }
   }
+  app_settings = {
+    "GX_STORAGE_ACCOUNT_NAME" = azurerm_storage_account.main.name
+    "GX_STORAGE_ACCESS_KEY" = azurerm_storage_account.main.primary_access_key
+    "GX_CONNECTION-NOSQLDB-DATASOURCE" = tostring("${azurerm_cosmosdb_account.main.connection_strings[0]}")
+
+    "GX_CONNECTION-DEFAULT-DATASOURCE" = azurerm_mssql_server.main.fully_qualified_domain_name
+    "GX_CONNECTION-DEFAULT-USER" = azurerm_mssql_server.main.administrator_login
+    "GX_CONNECTION-DEFAULT-PASSWORD" = azurerm_mssql_server.main.administrator_login_password
+  }
 }
 
 resource "azurerm_windows_function_app" "queue" {
@@ -41,5 +50,14 @@ resource "azurerm_windows_function_app" "queue" {
       dotnet_version = "v6.0"
       use_dotnet_isolated_runtime = true
     }
+  }
+  app_settings = {
+    # "GX_STORAGE_ACCOUNT_NAME" = azurerm_storage_account.main.name
+    # "GX_STORAGE_ACCESS_KEY" = azurerm_storage_account.main.primary_access_key
+    "GX_CONNECTION-NOSQLDB-DATASOURCE" = tostring("${azurerm_cosmosdb_account.main.connection_strings[0]}")
+
+    "GX_CONNECTION-DEFAULT-DATASOURCE" = azurerm_mssql_server.main.fully_qualified_domain_name
+    "GX_CONNECTION-DEFAULT-USER" = azurerm_mssql_server.main.administrator_login
+    "GX_CONNECTION-DEFAULT-PASSWORD" = azurerm_mssql_server.main.administrator_login_password
   }
 }

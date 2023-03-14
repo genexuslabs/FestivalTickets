@@ -40,9 +40,9 @@ resource "azurerm_windows_function_app" "backend" {
   }
 
   # Environment variables
-  # WEBSITE_CONTENTAZUREFILECONNECTIONSTRING
-  # app_settings = {
-  #  STORAGEACCOUNTNAME = azurerm_storage_account.main.name
-  #  STORAGEACCOUNTSECRET = azurerm_storage_account.main.primary_access_key
-  # }
+  app_settings = {
+    # "GX_STORAGE_ACCOUNT_NAME" = azurerm_storage_account.main.name
+    # "GX_STORAGE_ACCESS_KEY" = azurerm_storage_account.main.primary_access_key
+    "GX_CONNECTION-NOSQLDB-DATASOURCE" = tostring("${azurerm_cosmosdb_account.main.connection_strings[0]}")
+  }
 }

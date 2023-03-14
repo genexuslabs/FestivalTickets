@@ -1,41 +1,22 @@
+# ----------------------------------
 # Resource Group
+# ----------------------------------
 output "account_location" {
   description = "Application Region"
   value     = azurerm_resource_group.main.location
 }
-
-# Useless
-#output "resource_group_id" {
-#  description = "Resource Group Id"
-#  value     = azurerm_resource_group.main.id
-#}
 
 output "resource_group_name" {
   description = "Resource Group Name"
   value     = azurerm_resource_group.main.name
 }
 
-# Storage Account
-output "storage_account_name" {
-  description = "Storage account name"
-  value       = azurerm_storage_account.main.name
-}
-
-output "storage_account_primary_access_key" {
-    description = "Storage shared key"
-    value = nonsensitive(azurerm_storage_account.main.primary_access_key)
-}
-
-# Cosmos DB
-output "cosmosdb_connection_strings" {
-  description = "CosmosDB connection string"
-  value     = nonsensitive(azurerm_cosmosdb_account.main.connection_strings)
-}
-
+# ----------------------------------
 # Service Principal
-output "service_principal_display_name" {
-  value = "${azuread_service_principal.main.display_name}"
-}
+# ----------------------------------
+#output "service_principal_display_name" {
+#  value = "${azuread_service_principal.main.display_name}"
+#}
 
 output "service_principal_application_id" {
   description = "Service Principal Application Id"
@@ -53,6 +34,27 @@ output "service_principal_credentials" {
   value     = nonsensitive(azuread_service_principal_password.sp-password.value)
 }
 
+# ----------------------------------
+# Storage Account
+# ----------------------------------
+output "storage_account_name" {
+  description = "Storage account name"
+  value       = azurerm_storage_account.main.name
+}
+
+output "storage_account_primary_access_key" {
+    description = "Storage shared key"
+    value = nonsensitive(azurerm_storage_account.main.primary_access_key)
+}
+
+# ----------------------------------
+# Cosmos DB
+# ----------------------------------
+output "datastore_nosqldb_servername" {
+  description = "CosmosDB connection string"
+  value     = nonsensitive(tostring("${azurerm_cosmosdb_account.main.connection_strings[0]}"))
+}
+
 # output "service_principal_object_id" {
 #  description = "Service Principal ObjectId"
 #  value = "${azuread_service_principal.main.id}"
@@ -61,18 +63,26 @@ output "service_principal_credentials" {
 # ----------------------------------
 # Backend - Serverless
 # ----------------------------------
-output "backend_appfunction_id" {
-  description = "Backend app function id"
+output "backend_appfunction_name" {
+  description = "Backend app function name"
   value = "${azurerm_windows_function_app.backend.name}"
+}
+output "backend_appfunction_url" {
+  description = "Backend app function url"
+  value = "https://${azurerm_windows_function_app.backend.default_hostname}"
 }
 
 # ----------------------------------
 # Frontend
 # ----------------------------------
-output "frontend_cdn_endpoint" {
+output "frontend_endpoint" {
   description = "Angular frontend CDN endpoint"
-  value       = "https://${azurerm_cdn_endpoint.main.name}.azureedge.net"
-  
+  value       = "https://${azurerm_cdn_endpoint.main.name}.azureedge.net"  
+}
+
+output "frontend_servicesurl" {
+  description = "Services URL"
+  value = "${azurerm_api_management.main.gateway_url}/festivaltickets/"
 }
 
 # ----------------------------------
@@ -80,21 +90,16 @@ output "frontend_cdn_endpoint" {
 # ----------------------------------
 output "backoffice_endpoint" {
   description = "Backoffice endpoint"
-  value       = "https://${azurerm_windows_web_app.bo.name}.azurewebsites.net"
+  value       = "https://${azurerm_windows_web_app.bo.name}.azurewebsites.net/businesslogic.bohome.aspx"
   
 }
 
 # ----------------------------------
 # Azure SQL
 # ----------------------------------
-output "mssql_fqdn" {
+output "mssql_servername" {
   description = "The FQDN of the sql server."
   value = azurerm_mssql_server.main.fully_qualified_domain_name
-}
-
-output "mssql_db" {
-  description = "Database"
-  value       = azurerm_mssql_database.main.name
 }
 
 output "mssql_user" {
@@ -118,6 +123,3 @@ output "function_queue" {
   description = "Ticket Ruffle"
   value       =  azurerm_windows_function_app.queue.name
 }
-
-# ruffle
-# ticket
