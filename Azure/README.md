@@ -42,3 +42,5 @@ terraform init
 // Execute terraform script
 terraform apply
 ```
+## Disclaimer
+By running this code you may incur in cloud infrastructure costs.
