@@ -42,6 +42,7 @@ terraform init
 // Execute terraform script
 terraform apply
 ```
+> Note: This process creates DB tables too.
 
 ## Troubleshooting
 ### Errror "Waiting for creation/update of Api Management (ExpiredAuthenticationToken)"

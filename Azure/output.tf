@@ -63,11 +63,18 @@ output "datastore_nosqldb_servername" {
 # ----------------------------------
 # Backend - Serverless
 # ----------------------------------
-output "backend_appfunction_name" {
+
+output "backend_function_app" {
   description = "Backend app function name"
   value = "${azurerm_windows_function_app.backend.name}"
 }
-output "backend_appfunction_url" {
+
+output "backend_apim_servicename" {
+  description = "API Management Service Name"
+  value = "${azurerm_api_management.main.name}"
+}
+
+output "backend_api_service_url" {
   description = "Backend app function url"
   value = "https://${azurerm_windows_function_app.backend.default_hostname}"
 }

@@ -11,3 +11,7 @@ resource "random_string" "random-name" {
   number  = true
   special = false
 }
+
+data "http" "myip" {
+  url = "http://ipv4.icanhazip.com"
+}
