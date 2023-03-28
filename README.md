@@ -3,7 +3,7 @@ FestivalTickets is an example of a high scalability system built with Genexus. I
 
 This repository contains the necessary resources for creating the infrastructure across various cloud providers.
 
-Cloud providers:
+## Cloud providers:
 * [AWS](AWS/README.md)
 * [Azure](Azure/README.md)
 
