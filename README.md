@@ -1,5 +1,5 @@
 # FestivalTickets - IaC
-FestivalTickets is an example of a high scalability system built with Genexus. It is a ticket ruffle system designed for massive events.
+FestivalTickets is an example of a high scalability system built with GeneXus. It is a ticket ruffle system designed for massive events.
 
 This repository contains the necessary resources for creating the infrastructure across various cloud providers.
 
