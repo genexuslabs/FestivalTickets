@@ -1,4 +1,4 @@
-# FestivalTickets CDK Sample
+# FestivalTickets - AWS CDK Sample
 Festival Tickets is an example of a massive event ticket giveaway, which can have hundreds of thousands or millions of subscriptions per hour.
 
 For more information about FestivalTickets, follow this link:
