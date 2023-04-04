@@ -9,6 +9,9 @@ Learn more about [FestivalTickets on GeneXus Wiki](https://wiki.genexus.com/comm
 * [AWS](AWS/README.md)
 * [Azure](Azure/README.md)
 
+## Related links
+* [GeneXus AWS CDK Samples](https://github.com/genexuslabs/gx-aws-cdk-samples)
+
 ## Disclaimer
 By running this code you may incur in cloud infrastructure costs.
 
