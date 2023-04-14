@@ -4,14 +4,10 @@ resource "azurerm_cosmosdb_account" "main" {
   resource_group_name = azurerm_resource_group.main.name
   offer_type          = "Standard"
   kind                = "GlobalDocumentDB"
-
-  # azurerm_cosmosdb_account  = true
   
   enable_automatic_failover = false
   enable_free_tier          = true
 
-  # is_virtual_network_filter_enabled = true
-  # 52.244.48.71 eliminar
   ip_range_filter   = "${chomp(data.http.myip.body)},104.42.195.92,40.76.54.131,52.176.6.30,52.169.50.45,52.187.184.26,0.0.0.0"
 
   consistency_policy {

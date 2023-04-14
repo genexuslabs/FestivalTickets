@@ -25,7 +25,7 @@ resource "null_resource" "db_creation" {
 #  }
   provisioner "local-exec" {
     interpreter = ["PowerShell", "-Command"]
-    command = "sqlcmd -S ${azurerm_mssql_server.main.fully_qualified_domain_name} -d ${azurerm_mssql_database.main.name}  -U sqladmin -P \"${chomp(azurerm_mssql_server.main.administrator_login_password)}\" -i .\\db_setup.sql"
+    command = "sqlcmd -S ${azurerm_mssql_server.main.fully_qualified_domain_name} -d ${azurerm_mssql_database.main.name}  -U sqladmin -P '${chomp(azurerm_mssql_server.main.administrator_login_password)}' -i .\\db_setup.sql"
   }
 }
 
