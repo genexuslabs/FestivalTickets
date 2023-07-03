@@ -312,6 +312,9 @@ export class GeneXusServerlessAngularApp extends Construct {
       originRequestPolicy: originPolicy,
     });
 
+    // Backoffice
+    this.createBackoofice();
+
     // ****************************************
     // Generic
     // ****************************************
@@ -328,7 +331,7 @@ export class GeneXusServerlessAngularApp extends Construct {
     // Backoffice
     // ****************************************
     new cdk.CfnOutput(this, 'Backoffice - Apprunner-url', {
-      value: 'https://' + this.appRunner.serviceUrl,
+      value: `https://${this.appRunner.serviceUrl}`,
     });
 
     // ****************************************

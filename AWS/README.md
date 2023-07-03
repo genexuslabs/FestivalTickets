@@ -27,9 +27,10 @@ This stack will Deploy:
 By running this code you may incur in cloud infrastructure costs.
 
 ## Requirements
-* [Node.js] (https://nodejs.org/en)
+* [Node.js](https://nodejs.org/en)
 * Amazon AWS CDK
     * Install after Node.js by running: npm i aws-cdk -g
+* [Docker](https://www.docker.com/)
 
 ## Running the script
 Run in your cmd: 
