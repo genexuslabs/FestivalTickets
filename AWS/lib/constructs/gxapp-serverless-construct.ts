@@ -158,6 +158,8 @@ export class GeneXusServerlessAngularApp extends Construct {
     const websitePublicBucket = new s3.Bucket(this, `${this.appName}-bucket-web`, {
       websiteIndexDocument: "index.html",
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS,
+      accessControl: s3.BucketAccessControl.BUCKET_OWNER_FULL_CONTROL
     });
     websitePublicBucket.grantPublicAccess();
     websitePublicBucket.grantReadWrite(appGroup);
