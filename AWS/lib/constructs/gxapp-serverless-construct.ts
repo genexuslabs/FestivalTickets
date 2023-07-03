@@ -5,7 +5,7 @@ import {LambdaFunction} from "aws-cdk-lib/aws-events-targets";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as sqs from "aws-cdk-lib/aws-sqs";
 import * as lambda from "aws-cdk-lib/aws-lambda";
-import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as ecr from "aws-cdk-lib/aws-ecr";
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
 import * as s3 from "aws-cdk-lib/aws-s3";
@@ -18,6 +18,7 @@ import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager'
 import { Construct } from 'constructs';
 // { Credentials, DatabaseInstance, DatabaseInstanceEngine, DatabaseSecret, MysqlEngineVersion }
 import * as rds from 'aws-cdk-lib/aws-rds';
+import * as apprunner from '@aws-cdk/aws-apprunner-alpha';
 
 import { OriginProtocolPolicy } from "aws-cdk-lib/aws-cloudfront";
 import { timeStamp } from "console";
@@ -41,6 +42,8 @@ const defaultLambdaRuntime = lambda.Runtime.JAVA_11;
 const rewriteEdgeLambdaHandlerName = "rewrite.handler";
 
 export class GeneXusServerlessAngularApp extends Construct {
+  appName: string;
+  stageName: string;
   isDevEnv: boolean = true;
   vpc: ec2.Vpc;
   dbServer: rds.DatabaseInstance;
@@ -53,6 +56,7 @@ export class GeneXusServerlessAngularApp extends Construct {
   securityGroup: ec2.SecurityGroup;
   accessKey: iam.CfnAccessKey;
   envVars: any = {};
+  appRunner: apprunner.Service;
 
   constructor(
     scope: Construct,
@@ -63,14 +67,14 @@ export class GeneXusServerlessAngularApp extends Construct {
 
     const stack = cdk.Stack.of(this);
 
-    const apiName = props?.apiName || "";
-    const stageName = props?.stageName || "";
+    this.appName = props?.apiName || "";
+    this.stageName = props?.stageName || "";
 
-    if (apiName.length == 0) {
+    if (this.appName.length == 0) {
       throw new Error("API Name cannot be empty");
     }
 
-    if (stageName.length == 0) {
+    if (this.stageName.length == 0) {
       throw new Error("Stage Name cannot be empty");
     }
 
@@ -110,7 +114,7 @@ export class GeneXusServerlessAngularApp extends Construct {
     // User groups to split policies
     // Note: Maximum policy size of 2048 bytes exceeded for user
     const festGroup = new iam.Group(this, 'festival-group-id', {
-      groupName: `${apiName}_${stageName}_festgroup`
+      groupName: `${this.appName}_${this.stageName}_festgroup`
     });
     festGroup.addUser(this.iamUser);
     this.DCache.grantReadWriteData( festGroup);
@@ -119,7 +123,7 @@ export class GeneXusServerlessAngularApp extends Construct {
     // -------------------------------
     // SQS Ticket Queue
     const ticketQueue = new sqs.Queue(this, `ticketqueue`, {
-      queueName: `${apiName}_${stageName}_ticketqueue`
+      queueName: `${this.appName}_${this.stageName}_ticketqueue`
     });
 
     // -------------------------------
@@ -147,11 +151,11 @@ export class GeneXusServerlessAngularApp extends Construct {
     // Angular App Host
     // Maximum policy size of 2048 bytes exceeded for user
     const appGroup = new iam.Group(this, 'app-group-id', {
-      groupName: `${apiName}_${stageName}_appgroup`
+      groupName: `${this.appName}_${this.stageName}_appgroup`
     });
     appGroup.addUser(this.iamUser);    
     
-    const websitePublicBucket = new s3.Bucket(this, `${apiName}-bucket-web`, {
+    const websitePublicBucket = new s3.Bucket(this, `${this.appName}-bucket-web`, {
       websiteIndexDocument: "index.html",
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -167,7 +171,7 @@ export class GeneXusServerlessAngularApp extends Construct {
     });
     
     // Storage
-    const storageBucket = new s3.Bucket(this, `${apiName}-bucket`, {
+    const storageBucket = new s3.Bucket(this, `${this.appName}-bucket`, {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
     storageBucket.grantPutAcl(appGroup);
@@ -176,11 +180,11 @@ export class GeneXusServerlessAngularApp extends Construct {
 
     // -----------------------------
     // Backend services
-    const api = new apigateway.RestApi(this, `${apiName}-apigw`, {
-      description: `${apiName} APIGateway Endpoint`,
-      restApiName: apiName,
+    const api = new apigateway.RestApi(this, `${this.appName}-apigw`, {
+      description: `${this.appName} APIGateway Endpoint`,
+      restApiName: this.appName,
       deployOptions: {
-        stageName: stageName,
+        stageName: this.stageName,
       },
       defaultCorsPreflightOptions: {
         allowHeaders: [
@@ -195,8 +199,8 @@ export class GeneXusServerlessAngularApp extends Construct {
       },
     });
 
-    const lambdaFunctionName = `${apiName}_${stageName}`;
-    const lambdaFunction = new lambda.Function(this, `${apiName}-function`, {
+    const lambdaFunctionName = `${this.appName}_${this.stageName}`;
+    const lambdaFunction = new lambda.Function(this, `${this.appName}-function`, {
       environment: this.envVars,
       functionName: lambdaFunctionName,
       runtime: defaultLambdaRuntime,
@@ -208,7 +212,7 @@ export class GeneXusServerlessAngularApp extends Construct {
       timeout: props?.timeout || lambdaDefaultTimeout,
       memorySize: props?.memorySize || lambdaDefaultMemorySize,
       description: `'${
-        props?.apiDescription || apiName
+        props?.apiDescription || this.appName
       }' Serverless Lambda function`,
       securityGroups: [this.securityGroup],
       logRetention: logs.RetentionDays.ONE_WEEK,
@@ -227,8 +231,8 @@ export class GeneXusServerlessAngularApp extends Construct {
     );
     
     const rewriteEdgeFunctionResponse =
-      new cloudfront.experimental.EdgeFunction(this, `${apiName}EdgeLambda`, {
-        functionName: `${apiName}-${stageName}-EdgeLambda`,
+      new cloudfront.experimental.EdgeFunction(this, `${this.appName}EdgeLambda`, {
+        functionName: `${this.appName}-${this.stageName}-EdgeLambda`,
         runtime: lambda.Runtime.NODEJS_14_X,
         handler: rewriteEdgeLambdaHandlerName,
         code: lambda.Code.fromAsset("lambda"),
@@ -241,10 +245,10 @@ export class GeneXusServerlessAngularApp extends Construct {
 
     const originPolicy = new cloudfront.OriginRequestPolicy(
       this,
-      `${apiName}HttpOriginPolicy`,
+      `${this.appName}HttpOriginPolicy`,
       {
         //originRequestPolicyName: "GX-HTTP-Origin-Policy",
-        comment: `${apiName} Origin Http Policy`,
+        comment: `${this.appName} Origin Http Policy`,
         headerBehavior: cloudfront.CacheHeaderBehavior.allowList(
           "Accept",
           "Accept-Charset",
@@ -270,9 +274,9 @@ export class GeneXusServerlessAngularApp extends Construct {
 
     const webDistribution = new cloudfront.Distribution(
       this,
-      `${apiName}-cdn`,
+      `${this.appName}-cdn`,
       {
-        comment: `${apiName} Cloudfront Distribution`,
+        comment: `${this.appName} Cloudfront Distribution`,
         domainNames: props?.webDomainName ? [props?.webDomainName] : undefined,
         certificate: certificate,
         defaultBehavior: {
@@ -300,7 +304,7 @@ export class GeneXusServerlessAngularApp extends Construct {
 
     webDistribution.node.addDependency(api);
 
-    webDistribution.addBehavior(`/${stageName}/*`, apiGatewayOrigin, {
+    webDistribution.addBehavior(`/${this.stageName}/*`, apiGatewayOrigin, {
       compress: true,
       viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.ALLOW_ALL,
       allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
@@ -308,35 +312,55 @@ export class GeneXusServerlessAngularApp extends Construct {
       originRequestPolicy: originPolicy,
     });
 
-    new cdk.CfnOutput(this, "WebURL", {
-      value: `https://${webDistribution.domainName}`,
-      description: "Frontend Website URL",
-    });
-
-    new cdk.CfnOutput(this, "ApiURL", {
-      value: `https://${webDistribution.domainName}/${stageName}/`,
-      description: "Services API URL (Services URL)",
-    });
-    new cdk.CfnOutput(this, "WebsiteBucket", {
-      value: websitePublicBucket.bucketName,
-      description: "Bucket Name for Angular WebSite Deployment",
-    });
-    new cdk.CfnOutput(this, "StorageBucket", {
-      value: storageBucket.bucketName,
-      description: "Bucket for Storage Service",
-    });
-    
+    // ****************************************
     // Generic
-    new cdk.CfnOutput(this, "ApiName", {
-      value: apiName,
-      description: "Application Name (API Name)",
+    // ****************************************
+    new cdk.CfnOutput(this, "AppName", {
+      value: this.appName,
+      description: "Application Name",
     });
     new cdk.CfnOutput(this, "StageName", {
-      value: stageName,
+      value: this.stageName,
       description: "Stage Name",
     });
+
+    // ****************************************
+    // Backoffice
+    // ****************************************
+    new cdk.CfnOutput(this, 'Backoffice - Apprunner-url', {
+      value: 'https://' + this.appRunner.serviceUrl,
+    });
+
+    // ****************************************
+    // Backend - Api gateway
+    // ****************************************
+    new cdk.CfnOutput(this, "ApiURL", {
+      value: `https://${webDistribution.domainName}/${this.stageName}/`,
+      description: "Backend - Services API URL (Services URL)",
+    });
+
+
+    // ****************************************
+    // Frontend - Angular
+    // ****************************************
+    new cdk.CfnOutput(this, "Frontend-Bucket", {
+      value: websitePublicBucket.bucketName,
+      description: "Frontend - Bucket Name for Angular WebSite Deployment",
+    });
+
+    new cdk.CfnOutput(this, "Frontend-WebURL", {
+      value: `https://${webDistribution.domainName}`,
+      description: "Frontend - Website URL",
+    });
+
+    new cdk.CfnOutput(this, "Storage-Bucket", {
+      value: storageBucket.bucketName,
+      description: "Storage - Bucket for Storage Service",
+    });
     
-    // RDS MySQL
+    // ****************************************
+    // DB - RDS MySQL
+    // ****************************************
     new cdk.CfnOutput(this, "DBEndPoint", {
       value: this.dbServer.dbInstanceEndpointAddress,
       description: "RDS MySQL Endpoint",
@@ -348,17 +372,17 @@ export class GeneXusServerlessAngularApp extends Construct {
     });
     
     // Get access to the secret object
-    const dbPasswordSecret = secretsmanager.Secret.fromSecretNameV2(
-      this,
-      'db-pwd-id',
-      this.dbServer.secret?.secretName!,
-    );
+    // const dbPasswordSecret = secretsmanager.Secret.fromSecretNameV2(
+    //   this,
+    //   'db-pwd-id',
+    //   this.dbServer.secret?.secretName!,
+    // );
 
     // Dynamo
-    new cdk.CfnOutput(this, 'DynamoDCacheTableName', { value: this.DCache.tableName });
-    new cdk.CfnOutput(this, 'DynamoDTicketTableName', { value: this.DTicket.tableName });
+    // new cdk.CfnOutput(this, 'DynamoDCacheTableName', { value: this.DCache.tableName });
+    // new cdk.CfnOutput(this, 'DynamoDTicketTableName', { value: this.DTicket.tableName });
     
-    new cdk.CfnOutput(this, "IAMRoleARN", {
+    new cdk.CfnOutput(this, "Lambda - IAMRoleARN", {
       value: this.lambdaRole.roleArn,
       description: "IAM Role ARN",
     });
@@ -436,7 +460,8 @@ export class GeneXusServerlessAngularApp extends Construct {
     this.lambdaRole = new iam.Role(this, `lambda-role`, {
       assumedBy: new iam.CompositePrincipal(
         new iam.ServicePrincipal("apigateway.amazonaws.com"),
-        new iam.ServicePrincipal("lambda.amazonaws.com")
+        new iam.ServicePrincipal("lambda.amazonaws.com"),
+        new iam.ServicePrincipal("build.apprunner.amazonaws.com")
       ),
       description: "GeneXus Serverless Application Lambda Role",
       managedPolicies: [
@@ -452,8 +477,12 @@ export class GeneXusServerlessAngularApp extends Construct {
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           "service-role/AWSLambdaSQSQueueExecutionRole"
         ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          "service-role/AWSAppRunnerServicePolicyForECRAccess"
+        )
       ],
     });
+
   }
 
   private createDynamo(props: GeneXusServerlessAngularAppProps){
@@ -565,6 +594,25 @@ export class GeneXusServerlessAngularApp extends Construct {
     })
   }
 
+  private createBackoofice(){    
+    const vpcConnector = new apprunner.VpcConnector(this, 'VpcConnector', {
+      vpc: this.vpc,
+      vpcSubnets: this.vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }),
+      vpcConnectorName: `${this.appName}_${this.stageName}_VpcConnector`,
+      securityGroups: [this.securityGroup]
+    });
+
+    this.appRunner = new apprunner.Service(this, 'Frontend-Apprunner', {
+      serviceName: `${this.appName}_${this.stageName}_frontend`,
+      source: apprunner.Source.fromEcr({
+        imageConfiguration: { port: 8080 },
+        repository: ecr.Repository.fromRepositoryName(this, 'backoffice-repo', `${this.appName}_${this.stageName}_backoffice`),
+        tagOrDigest: 'latest',
+      }),
+      vpcConnector,
+      accessRole: this.lambdaRole
+    });
+  }
   private createVPC(props: GeneXusServerlessAngularAppProps){
     const apiName = props?.apiName || "";
     const stageName = props?.stageName || "";
@@ -580,7 +628,7 @@ export class GeneXusServerlessAngularApp extends Construct {
         {
           cidrMask: 24,
           name: 'private_isolated',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_NAT,
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
         }
       ],
       maxAzs: 2

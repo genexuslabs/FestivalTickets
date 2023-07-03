@@ -26,17 +26,21 @@ This stack will Deploy:
 ## Disclaimer
 By running this code you may incur in cloud infrastructure costs.
 
+## Requirements
+* [Node.js] (https://nodejs.org/en)
+* Amazon AWS CDK
+    * Install after Node.js by running: npm i aws-cdk -g
+
 ## Running the script
 Run in your cmd: 
 ```
 //Navigate to a folder of your preference
-npm i aws-cdk -g
-git clone https://github.com/genexuslabs/gx-aws-cdk-samples.git
-cd gx-aws-cdk-samples/aws-festivaltickets
+git clone https://github.com/genexuslabs/FestivalTickets.git
+cd FestivalTickets/AWS
 npm install
 npm run build
-cdk bootstrap aws://ACCOUNT-NUMBER/AWS-REGION
-cdk deploy --app "node ./bin/create-serverless-app.js" -c name=myGXSlsApp -c stage=test
+cdk bootstrap
+cdk deploy -c appname=festivalticketsapp -c stage=test
 ```
 
 ## Useful commands
