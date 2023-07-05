@@ -33,14 +33,24 @@ By running this code you may incur in cloud infrastructure costs.
 * [Docker](https://www.docker.com/)
 
 ## Running the script
-Run in your cmd: 
+For this example we user the parameters:
+* Appname: festivalticketsapp
+* Stage: test
+
+Run in your cmd:
 ```
 //Navigate to a folder of your preference
 git clone https://github.com/genexuslabs/FestivalTickets.git
 cd FestivalTickets/AWS
+
 npm install
 npm run build
 cdk bootstrap
+
+// Create ECR repository with default image (only once)
+// Note: ECR repository must be deleted manually
+.\ecrinit.bat festivalticketsapp test
+
 cdk deploy -c appname=festivalticketsapp -c stage=test
 ```
 

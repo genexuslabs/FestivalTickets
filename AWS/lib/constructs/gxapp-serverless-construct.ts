@@ -78,27 +78,52 @@ export class GeneXusServerlessAngularApp extends Construct {
       throw new Error("Stage Name cannot be empty");
     }
 
+    // WarmUp
+    new cdk.CfnOutput(this, "AppName", {
+      value: this.appName,
+      description: "Application Name",
+    });
+    new cdk.CfnOutput(this, "StageName", {
+      value: this.stageName,
+      description: "Stage Name",
+    });
+
     // -------------------------------
     // Lambda Role
     this.lambdaRoleCreate(props);
 
     // -------------------------------
-    // IAM User
+    // IAM User and groups
+    // -------------------------------
     this.iamUserCreate(props);
+    const appGroup = new iam.Group(this, 'app-group-id', {
+      groupName: `${this.appName}_${this.stageName}_appgroup`
+    });
+    appGroup.addUser(this.iamUser); 
+    
+    // Note: Maximum policy size of 2048 bytes exceeded for user
+    const festGroup = new iam.Group(this, 'festival-group-id', {
+      groupName: `${this.appName}_${this.stageName}_festgroup`
+    });
+    festGroup.addUser(this.iamUser);
 
     //----------------------------------
     // VPC
+    //----------------------------------
     this.createVPC(props); 
     const DynamoGatewayEndpoint = this.vpc.addGatewayEndpoint('Dynamo-endpoint', {
       service: ec2.GatewayVpcEndpointAwsService.DYNAMODB
     });
-    
-    //---------------------------------
-    // RDS - MySQL 8.0
+
+    // Security group
     this.securityGroup = new ec2.SecurityGroup(this, `rds-sg`, {
       vpc: this.vpc,
       allowAllOutbound: true
     });
+    
+    //---------------------------------
+    // RDS - MySQL 8.0
+    //---------------------------------
     this.securityGroup.connections.allowFrom( this.securityGroup, ec2.Port.tcp(3306));
     if (this.isDevEnv) {
       //Access from MyIP
@@ -106,24 +131,34 @@ export class GeneXusServerlessAngularApp extends Construct {
     }
     this.createDB(props);
 
+    new cdk.CfnOutput(this, "DBEndPoint", {
+      value: this.dbServer.dbInstanceEndpointAddress,
+      description: "RDS MySQL Endpoint",
+    });
+    
+    new cdk.CfnOutput(this, 'DBSecretName', {
+      value: this.dbServer.secret?.secretName!,
+      description: "RDS MySQL Secret Name",
+    });
+
     // ---------------------------------
     // Dynamo
     this.createDynamo(props);
-
-    // --------------------------------------
-    // User groups to split policies
-    // Note: Maximum policy size of 2048 bytes exceeded for user
-    const festGroup = new iam.Group(this, 'festival-group-id', {
-      groupName: `${this.appName}_${this.stageName}_festgroup`
-    });
-    festGroup.addUser(this.iamUser);
     this.DCache.grantReadWriteData( festGroup);
     this.DTicket.grantReadWriteData( festGroup);
 
+    // new cdk.CfnOutput(this, 'DynamoDCacheTableName', { value: this.DCache.tableName });
+    // new cdk.CfnOutput(this, 'DynamoDTicketTableName', { value: this.DTicket.tableName });
+    
     // -------------------------------
     // SQS Ticket Queue
+    // -------------------------------
     const ticketQueue = new sqs.Queue(this, `ticketqueue`, {
       queueName: `${this.appName}_${this.stageName}_ticketqueue`
+    });
+    new cdk.CfnOutput(this, "SQSTicketUrl", {
+      value: ticketQueue.queueUrl,
+      description: "SQS Ticket Url",
     });
 
     // -------------------------------
@@ -135,44 +170,41 @@ export class GeneXusServerlessAngularApp extends Construct {
     this.envVars[`GX_DEFAULT_USER_PASSWORD`] = this.dbServer.secret?.secretValueFromJson('password');
     this.envVars[`GX_DYNAMODBDS_USER_ID`] = this.accessKey.ref;
     this.envVars[`GX_DYNAMODBDS_USER_PASSWORD`] = this.accessKey.attrSecretAccessKey;
+    
+    // ----------------------------------------
+    // Backoffice
+    // ----------------------------------------
+    this.createBackoofice();
+    
+    new cdk.CfnOutput(this, 'Backoffice - Apprunner-url', {
+      value: `https://${this.appRunner.serviceUrl}`,
+    });
 
     // -------------------------------
     // FestivalTickets Lambdas (SQS & CRON)
     this.createFestivalTicketsLambdas( props);
 
+    new cdk.CfnOutput(this, "LambdaTicketProcess", {
+      value: this.queueLambdaFunction.functionName,
+      description: "Ticket Process Lambda Name",
+    });
+
+    new cdk.CfnOutput(this, "LambdaCron", {
+      value: this.cronLambdaFunction.functionName,
+      description: "Ticket Ruffle Lambda Cron",
+    });
+
     // Some queue permissions
     ticketQueue.grantConsumeMessages(this.queueLambdaFunction);
     ticketQueue.grantSendMessages(festGroup);
+    
     // Lambda queue trigger
     const eventSource = new lambdaEventSources.SqsEventSource(ticketQueue);
     this.queueLambdaFunction.addEventSource(eventSource);
-
-    // -------------------------------------------------------------
-    // Angular App Host
-    // Maximum policy size of 2048 bytes exceeded for user
-    const appGroup = new iam.Group(this, 'app-group-id', {
-      groupName: `${this.appName}_${this.stageName}_appgroup`
-    });
-    appGroup.addUser(this.iamUser);    
     
-    const websitePublicBucket = new s3.Bucket(this, `${this.appName}-bucket-web`, {
-      websiteIndexDocument: "index.html",
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS,
-      accessControl: s3.BucketAccessControl.BUCKET_OWNER_FULL_CONTROL
-    });
-    websitePublicBucket.grantPublicAccess();
-    websitePublicBucket.grantReadWrite(appGroup);
-    new iam.PolicyDocument({
-      statements: [
-        new iam.PolicyStatement({
-          actions: ["sts:AssumeRole"],
-          effect: iam.Effect.ALLOW,
-        }),
-      ],
-    });
-    
+    // -----------------------------------
     // Storage
+    // -----------------------------------
     const storageBucket = new s3.Bucket(this, `${this.appName}-bucket`, {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS,
@@ -182,8 +214,14 @@ export class GeneXusServerlessAngularApp extends Construct {
     storageBucket.grantReadWrite(appGroup);
     storageBucket.grantPublicAccess();
 
+    new cdk.CfnOutput(this, "Storage-Bucket", {
+      value: storageBucket.bucketName,
+      description: "Storage - Bucket for Storage Service",
+    });
+
     // -----------------------------
     // Backend services
+    // -----------------------------
     const api = new apigateway.RestApi(this, `${this.appName}-apigw`, {
       description: `${this.appName} APIGateway Endpoint`,
       restApiName: this.appName,
@@ -234,6 +272,30 @@ export class GeneXusServerlessAngularApp extends Construct {
       })
     );
     
+    // -------------------------------------------------------------
+    // Angular App Host
+    // Maximum policy size of 2048 bytes exceeded for user
+    // -------------------------------------------------------------
+    
+    const websitePublicBucket = new s3.Bucket(this, `${this.appName}-bucket-web`, {
+      websiteIndexDocument: "index.html",
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS,
+      accessControl: s3.BucketAccessControl.BUCKET_OWNER_FULL_CONTROL
+    });
+
+    websitePublicBucket.grantPublicAccess();
+    websitePublicBucket.grantReadWrite(appGroup);
+
+    new iam.PolicyDocument({
+      statements: [
+        new iam.PolicyStatement({
+          actions: ["sts:AssumeRole"],
+          effect: iam.Effect.ALLOW,
+        }),
+      ],
+    });
+
     const rewriteEdgeFunctionResponse =
       new cloudfront.experimental.EdgeFunction(this, `${this.appName}EdgeLambda`, {
         functionName: `${this.appName}-${this.stageName}-EdgeLambda`,
@@ -315,29 +377,7 @@ export class GeneXusServerlessAngularApp extends Construct {
       cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
       originRequestPolicy: originPolicy,
     });
-
-    // Backoffice
-    this.createBackoofice();
-
-    // ****************************************
-    // Generic
-    // ****************************************
-    new cdk.CfnOutput(this, "AppName", {
-      value: this.appName,
-      description: "Application Name",
-    });
-    new cdk.CfnOutput(this, "StageName", {
-      value: this.stageName,
-      description: "Stage Name",
-    });
-
-    // ****************************************
-    // Backoffice
-    // ****************************************
-    new cdk.CfnOutput(this, 'Backoffice - Apprunner-url', {
-      value: `https://${this.appRunner.serviceUrl}`,
-    });
-
+    
     // ****************************************
     // Backend - Api gateway
     // ****************************************
@@ -359,35 +399,6 @@ export class GeneXusServerlessAngularApp extends Construct {
       value: `https://${webDistribution.domainName}`,
       description: "Frontend - Website URL",
     });
-
-    new cdk.CfnOutput(this, "Storage-Bucket", {
-      value: storageBucket.bucketName,
-      description: "Storage - Bucket for Storage Service",
-    });
-    
-    // ****************************************
-    // DB - RDS MySQL
-    // ****************************************
-    new cdk.CfnOutput(this, "DBEndPoint", {
-      value: this.dbServer.dbInstanceEndpointAddress,
-      description: "RDS MySQL Endpoint",
-    });
-    
-    new cdk.CfnOutput(this, 'DBSecretName', {
-      value: this.dbServer.secret?.secretName!,
-      description: "RDS MySQL Secret Name",
-    });
-    
-    // Get access to the secret object
-    // const dbPasswordSecret = secretsmanager.Secret.fromSecretNameV2(
-    //   this,
-    //   'db-pwd-id',
-    //   this.dbServer.secret?.secretName!,
-    // );
-
-    // Dynamo
-    // new cdk.CfnOutput(this, 'DynamoDCacheTableName', { value: this.DCache.tableName });
-    // new cdk.CfnOutput(this, 'DynamoDTicketTableName', { value: this.DTicket.tableName });
     
     new cdk.CfnOutput(this, "Lambda - IAMRoleARN", {
       value: this.lambdaRole.roleArn,
@@ -401,21 +412,6 @@ export class GeneXusServerlessAngularApp extends Construct {
     new cdk.CfnOutput(this, "AccessSecretKey", {
       value: this.accessKey.attrSecretAccessKey,
       description: "Access Secret Key",
-    });
-
-    new cdk.CfnOutput(this, "SQSTicketUrl", {
-      value: ticketQueue.queueUrl,
-      description: "SQS Ticket Url",
-    });
-
-    new cdk.CfnOutput(this, "LambdaTicketProcess", {
-      value: this.queueLambdaFunction.functionName,
-      description: "Ticket Process Lambda Name",
-    });
-
-    new cdk.CfnOutput(this, "LambdaCron", {
-      value: this.cronLambdaFunction.functionName,
-      description: "Ticket Ruffle Lambda Cron",
     });
   }
 
@@ -609,11 +605,17 @@ export class GeneXusServerlessAngularApp extends Construct {
       securityGroups: [this.securityGroup]
     });
 
+    // const repository = new ecr.Repository(this, "backoffice-repo", {
+    //   repositoryName: `${this.appName}_${this.stageName}_bo`
+    // });
+
+    // ecr.Repository.fromRepositoryName(this, 'backoffice-repo', `${this.appName}_${this.stageName}_backoffice`),
+
     this.appRunner = new apprunner.Service(this, 'Frontend-Apprunner', {
       serviceName: `${this.appName}_${this.stageName}_frontend`,
       source: apprunner.Source.fromEcr({
         imageConfiguration: { port: 8080 },
-        repository: ecr.Repository.fromRepositoryName(this, 'backoffice-repo', `${this.appName}_${this.stageName}_backoffice`),
+        repository: ecr.Repository.fromRepositoryName(this, 'backoffice-repo', `${this.appName}_${this.stageName}_bo`),
         tagOrDigest: 'latest',
       }),
       vpcConnector,
