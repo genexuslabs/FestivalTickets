@@ -22,6 +22,8 @@ This stack will Deploy:
 * AWS Lambda (backend)
 * AWS Lambda (rewrite)
 * Amazon Cloudfront - GeneXus Angular Rewrite Lambda
+* ECR for Backoffice docker repository
+* Apprunner for Backoffice webapp
 
 ## Disclaimer
 By running this code you may incur in cloud infrastructure costs.
@@ -55,7 +57,7 @@ cdk deploy -c appname=festivalticketsapp -c stage=test
 ```
 
 ## Useful commands
-
+ * `.\ecrupdate.bat <appname> <stage>` update apprunner docker image 
  * `npm run build`   compile typescript to js
  * `npm run watch`   watch for changes and compile
  * `npm run test`    perform the jest unit tests

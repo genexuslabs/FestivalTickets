@@ -1,5 +1,6 @@
 import * as apigateway from "aws-cdk-lib/aws-apigateway";
 import * as cdk from "aws-cdk-lib";
+import { GeneXusServerlessAngularAppProps } from './GeneXusServerlessAngularAppProps';
 import {Rule, Schedule} from "aws-cdk-lib/aws-events";
 import {LambdaFunction} from "aws-cdk-lib/aws-events-targets";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
@@ -23,20 +24,12 @@ import * as apprunner from '@aws-cdk/aws-apprunner-alpha';
 import { OriginProtocolPolicy } from "aws-cdk-lib/aws-cloudfront";
 import { timeStamp } from "console";
 import { Queue } from "aws-cdk-lib/aws-sqs";
+const { CreateMainVPC } = require('./gxapp-vpc');
 
-export interface GeneXusServerlessAngularAppProps extends cdk.StackProps {
-  readonly apiName: string;
-  readonly apiDescription?: string;
-  readonly webDomainName?: string;
-  readonly stageName?: string;
-  readonly timeout?: cdk.Duration;
-  readonly memorySize?: number;
-  readonly certificateARN?: string | null;
-}
 
 const lambdaHandlerName =
   "com.genexus.cloud.serverless.aws.LambdaHandler::handleRequest";
-const lambdaDefaultMemorySize = 8192;
+const lambdaDefaultMemorySize = 3008;
 const lambdaDefaultTimeout = cdk.Duration.seconds(30);
 const defaultLambdaRuntime = lambda.Runtime.JAVA_11;
 const rewriteEdgeLambdaHandlerName = "rewrite.handler";
@@ -111,10 +104,11 @@ export class GeneXusServerlessAngularApp extends Construct {
     // VPC
     //----------------------------------
     this.createVPC(props); 
+    
     const DynamoGatewayEndpoint = this.vpc.addGatewayEndpoint('Dynamo-endpoint', {
       service: ec2.GatewayVpcEndpointAwsService.DYNAMODB
     });
-
+    
     // Security group
     this.securityGroup = new ec2.SecurityGroup(this, `rds-sg`, {
       vpc: this.vpc,
@@ -160,7 +154,7 @@ export class GeneXusServerlessAngularApp extends Construct {
       value: ticketQueue.queueUrl,
       description: "SQS Ticket Url",
     });
-
+    
     // -------------------------------
     // Environment variables
     this.envVars[`REGION`] = cdk.Stack.of(this).region;
@@ -177,9 +171,9 @@ export class GeneXusServerlessAngularApp extends Construct {
     this.createBackoofice();
     
     new cdk.CfnOutput(this, 'Backoffice - Apprunner-url', {
-      value: `https://${this.appRunner.serviceUrl}`,
+      value: `https://${this.appRunner.serviceUrl}/com.festivaltickets.businesslogic.bohome`,
     });
-
+    
     // -------------------------------
     // FestivalTickets Lambdas (SQS & CRON)
     this.createFestivalTicketsLambdas( props);
@@ -193,7 +187,7 @@ export class GeneXusServerlessAngularApp extends Construct {
       value: this.cronLambdaFunction.functionName,
       description: "Ticket Ruffle Lambda Cron",
     });
-
+    
     // Some queue permissions
     ticketQueue.grantConsumeMessages(this.queueLambdaFunction);
     ticketQueue.grantSendMessages(festGroup);
@@ -413,6 +407,7 @@ export class GeneXusServerlessAngularApp extends Construct {
       value: this.accessKey.attrSecretAccessKey,
       description: "Access Secret Key",
     });
+    
   }
 
   private iamUserCreate(props: GeneXusServerlessAngularAppProps){
@@ -580,7 +575,7 @@ export class GeneXusServerlessAngularApp extends Construct {
       publiclyAccessible: this.isDevEnv,
       vpcSubnets: {
         onePerAz: true,
-        subnetType: this.isDevEnv ? ec2.SubnetType.PUBLIC : ec2.SubnetType.PRIVATE_WITH_NAT
+        subnetType: this.isDevEnv ? ec2.SubnetType.PUBLIC : ec2.SubnetType.PRIVATE_WITH_EGRESS
       },
       credentials: rds.Credentials.fromGeneratedSecret('dbadmin'),
       vpc: this.vpc,
@@ -595,6 +590,13 @@ export class GeneXusServerlessAngularApp extends Construct {
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO),
       removalPolicy: this.isDevEnv ? cdk.RemovalPolicy.DESTROY : cdk.RemovalPolicy.RETAIN
     })
+    if (this.isDevEnv){
+      console.log(`** AZ ** ${this.vpc.availabilityZones.length}`);
+
+      for(let i=0;i<this.vpc.availabilityZones.length;i++){
+        this.dbServer.node.addDependency(this.vpc.publicSubnets[i].internetConnectivityEstablished);
+      }
+    }
   }
 
   private createBackoofice(){    
@@ -605,14 +607,8 @@ export class GeneXusServerlessAngularApp extends Construct {
       securityGroups: [this.securityGroup]
     });
 
-    // const repository = new ecr.Repository(this, "backoffice-repo", {
-    //   repositoryName: `${this.appName}_${this.stageName}_bo`
-    // });
-
-    // ecr.Repository.fromRepositoryName(this, 'backoffice-repo', `${this.appName}_${this.stageName}_backoffice`),
-
-    this.appRunner = new apprunner.Service(this, 'Frontend-Apprunner', {
-      serviceName: `${this.appName}_${this.stageName}_frontend`,
+    this.appRunner = new apprunner.Service(this, 'BO-Apprunner', {
+      serviceName: `${this.appName}_${this.stageName}_bo`,
       source: apprunner.Source.fromEcr({
         imageConfiguration: { port: 8080 },
         repository: ecr.Repository.fromRepositoryName(this, 'backoffice-repo', `${this.appName}_${this.stageName}_bo`),
