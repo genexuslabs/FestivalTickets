@@ -24,7 +24,7 @@ import * as apprunner from '@aws-cdk/aws-apprunner-alpha';
 import { OriginProtocolPolicy } from "aws-cdk-lib/aws-cloudfront";
 import { timeStamp } from "console";
 import { Queue } from "aws-cdk-lib/aws-sqs";
-const { CreateMainVPC } = require('./gxapp-vpc');
+// const { CreateMainVPC } = require('./gxapp-vpc');
 
 
 const lambdaHandlerName =
@@ -201,12 +201,15 @@ export class GeneXusServerlessAngularApp extends Construct {
     // -----------------------------------
     const storageBucket = new s3.Bucket(this, `${this.appName}-bucket`, {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ACLS,
-      accessControl: s3.BucketAccessControl.BUCKET_OWNER_FULL_CONTROL
+      blockPublicAccess: new s3.BlockPublicAccess({blockPublicAcls: false,blockPublicPolicy: false, restrictPublicBuckets:false }),
+      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_PREFERRED,
+      //accessControl: s3.BucketAccessControl.PUBLIC_READ
     });
+    // storageBucket.grantPublicAccess();
+    // storageBucket.grantPut(appGroup);
     storageBucket.grantPutAcl(appGroup);
     storageBucket.grantReadWrite(appGroup);
-    storageBucket.grantPublicAccess();
+    
 
     new cdk.CfnOutput(this, "Storage-Bucket", {
       value: storageBucket.bucketName,
